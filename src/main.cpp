@@ -6,6 +6,8 @@
 #include <Adafruit_AHTX0.h>
 #include <PickFood.h>
 #include <Ds1302.h>
+#include <EEPROM.h>
+
 
 // Configuración OLED
 #define SCREEN_WIDTH 128
@@ -32,25 +34,28 @@ int ganas_de_cocinar;
 
 // TIEMPO 
 Ds1302 rtc(15, 12, 13);
+#define EEPROM_ADDR_RTC_CONFIGURED 0
 
 
 // FUNCIONES 
 void welcome_message(); 
+
 void setRTCTime() {
   Ds1302::DateTime dt;
   dt.year = 2025;
   dt.month = 01;
   dt.day = 06;
-  dt.hour = 17;
-  dt.minute = 31;
+  dt.hour = 13;
+  dt.minute = 30;
   dt.second = 0;
   rtc.setDateTime(&dt);
 }
 
 void setup() {
   // Iniciar comunicación serial
+  EEPROM.begin(512);
   Serial.begin(115200);
-  delay(1000); // Espera para estabilizar
+  delay(1000); 
 
   Serial.println("Inicializando I2C...");
   
@@ -62,7 +67,7 @@ void setup() {
   Serial.println("Inicializando OLED...");
   if (!display.begin(SCREEN_ADDRESS, true)) {
     Serial.println(F("Error: Inicialización de SH1106 fallida"));
-    while (1); // Detener si falla la inicialización
+    while (1); 
   }
   Serial.println(F("SH1106 Inicializado Correctamente"));
 
@@ -93,9 +98,17 @@ void setup() {
   }
   Serial.println("AHT10 or AHT20 found");
 
+  // CONFIG RCT MODULE 
   rtc.init();
-  setRTCTime();
+  /* if (EEPROM.read(EEPROM_ADDR_RTC_CONFIGURED) != 1) {
+    setRTCTime(); 
+    EEPROM.write(EEPROM_ADDR_RTC_CONFIGURED, 1); 
+    EEPROM.commit();
+  } */
+
+ setRTCTime();
 }
+
 
 void loop() {
   float temp = bmp.readTemperature();
@@ -108,7 +121,8 @@ void loop() {
   rtc.getDateTime(&now); 
   int last_second = 0; 
 
-  
+  // DATA TEST 
+  String results = ProcessData(humidity.relative_humidity, temp, pressure/100.0, now.hour);
 
   // Mostrar datos en la pantalla OLED
   display.clearDisplay();
@@ -122,14 +136,13 @@ void loop() {
   display.println("Ganas de cocinar: " + String(ganas_de_cocinar));
   display.setCursor(0, 40);
   display.println("Hora: " + String(now.hour) + ":" + String(now.minute));
+  display.setCursor(0, 50);
+  display.println("Resultado: " + results); 
 
   display.display(); 
 
-
-
   // Button Pressed MAIN 
   // Llama función para calcular la recomendación 
-  //ProcessData();
 
   delay(2000); 
 }
