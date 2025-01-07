@@ -9,6 +9,10 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>      
 #include <Config.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+#include <UrlEncode.h>
+
 
 // WIFI 
 #define ssid red        
@@ -41,10 +45,16 @@ int ganas_de_cocinar;
 Ds1302 rtc(15, 12, 13);
 #define EEPROM_ADDR_RTC_CONFIGURED 0
 
+// Whatsapp
+#define lucas numLucas 
+#define lara numLara 
+#define apiKey api 
+
 
 // FUNCIONES 
 void welcome_message(); 
 void connect_WIFI(); 
+void sendMessage(String message, String number); 
 
 void setRTCTime() {
   Ds1302::DateTime dt;
@@ -156,7 +166,9 @@ void loop() {
   // Button Pressed MAIN 
   // Llama función para calcular la recomendación 
 
-  delay(2000); 
+  sendMessage(results, numLucas);
+
+  delay(20000); 
 }
 
 void connect_WIFI() {
@@ -187,4 +199,27 @@ void connect_WIFI() {
     Serial.println('\n');
     Serial.println("Failed to connect to Wi-Fi");
   }
+}
+
+void sendMessage(String message, String number)
+{
+  String url = "http://api.callmebot.com/whatsapp.php?phone=" + String(lucas) + "&apikey=" + apiKey + "&text=" + urlEncode(message);
+  WiFiClient client;    
+  HTTPClient http;
+  http.begin(client, url);
+
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  
+  int httpResponseCode = http.POST(url);
+  delay(1000);
+  if (httpResponseCode == 200){
+    Serial.print("Message sent successfully");
+  }
+  else{
+    Serial.println("Error sending the message");
+    Serial.print("HTTP response code: ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end();
 }
