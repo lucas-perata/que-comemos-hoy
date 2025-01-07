@@ -12,7 +12,7 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 #include <UrlEncode.h>
-
+#include <Button.h>
 
 // WIFI 
 #define ssid red        
@@ -39,6 +39,10 @@ Adafruit_AHTX0 aht;
 
 // VARIABLES GLOBALES
 int ganas_de_cocinar;
+String results; 
+float temp;
+float pressure;
+float hum_relative; 
 
 
 // TIEMPO 
@@ -53,8 +57,10 @@ Ds1302 rtc(15, 12, 13);
 
 // FUNCIONES 
 void welcome_message(); 
+void setup_modules(); 
 void connect_WIFI(); 
-void sendMessage(String message, String number); 
+void sendMessage(String message, String number, int api); 
+void displayAtmosphericValues(int tem, int pres, int hum);
 
 void setRTCTime() {
   Ds1302::DateTime dt;
@@ -68,107 +74,86 @@ void setRTCTime() {
 }
 
 void setup() {
-  // Iniciar comunicación serial
-  EEPROM.begin(512);
-  Serial.begin(9600);
-  delay(1000); 
-  WiFi.enableInsecureWEP(true);
-  connect_WIFI(); 
+  // Botones 
+  pinMode(D0, INPUT_PULLUP);
+  pinMode(D4, INPUT_PULLUP);
+  pinMode(D5, INPUT_PULLUP);
 
-  Serial.println("Inicializando I2C...");
-  
-  // Inicializar I2C en los pines definidos
-  Wire.begin(SDA_PIN, SCL_PIN);
-  Serial.println("I2C inicializado");
+  // LEDs 
+  pinMode(D3, OUTPUT);
 
-  // Inicializar la pantalla OLED
-  Serial.println("Inicializando OLED...");
-  if (!display.begin(SCREEN_ADDRESS, true)) {
-    Serial.println(F("Error: Inicialización de SH1106 fallida"));
-    while (1); 
-  }
-  Serial.println(F("SH1106 Inicializado Correctamente"));
-
-  // Configurar la pantalla OLED
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SH110X_WHITE);
-  display.setCursor(0, 0);
-  display.println("OLED Inicializado");
-  display.display();
-
-  // Inicializar el sensor BMP180
-  Serial.println("Inicializando BMP180...");
-  if (!bmp.begin()) {
-    Serial.println(F("Error: Inicialización de BMP180 fallida"));
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 10);
-    display.println("BMP180 Error");
-    display.display();
-    while (1); 
-  }
-  Serial.println(F("BMP180 Inicializado Correctamente"));
-
-  if (!aht.begin()) {
-    Serial.println("Could not find AHT? Check wiring");
-    while (1) delay(10);
-  }
-  Serial.println("AHT10 or AHT20 found");
-
-  // CONFIG RCT MODULE 
-  rtc.init();
-  /* if (EEPROM.read(EEPROM_ADDR_RTC_CONFIGURED) != 1) {
-    setRTCTime(); 
-    EEPROM.write(EEPROM_ADDR_RTC_CONFIGURED, 1); 
-    EEPROM.commit();
-  } */ 
- setRTCTime();
-
- // Potentiometer 
+  // Potentiometer 
  pinMode(A0, INPUT); 
 
-}
+
+  setup_modules(); 
+  connect_WIFI(); 
+ 
+  welcome_message(); 
+
+  temp = bmp.readTemperature();
+  pressure = bmp.readPressure();
+  sensors_event_t humidity, temps;
+  aht.getEvent(&humidity, &temps);
+  hum_relative = humidity.relative_humidity;
+ }
 
 
 void loop() {
-  float temp = bmp.readTemperature();
-  float pressure = bmp.readPressure();
-  sensors_event_t humidity, temps;
-  aht.getEvent(&humidity, &temps);
+  // VALORES CLIMATICOS 
   ganas_de_cocinar = analogRead(A0) / 10;
 
   // TIEMPO 
   Ds1302::DateTime now; 
   rtc.getDateTime(&now); 
-  int last_second = 0; 
-
-  // DATA TEST 
-  String results = ProcessData(humidity.relative_humidity, temp, pressure/100.0, now.hour, ganas_de_cocinar);
 
   // Mostrar datos en la pantalla OLED
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Temp: " + String(temp, 1) + " C");
-  display.setCursor(0, 10);
-  display.println("Presion: " + String(pressure / 100.0, 1) + " hPa");
-  display.setCursor(0, 20);
-  display.println("Humedad: " + String(humidity.relative_humidity) + "%");
-  display.setCursor(0, 30); 
-  display.println("Ganas de cocinar: " + String(ganas_de_cocinar));
-  display.setCursor(0, 40);
-  display.println("Hora: " + String(now.hour) + ":" + String(now.minute));
-  display.setCursor(0, 50);
-  display.println("Resultado: " + results); 
-
-  display.display(); 
+  if(results.isEmpty())
+  {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Temp: " + String(temp, 1) + " C");
+    display.setCursor(0, 10);
+    display.println("Presion: " + String(pressure / 100.0, 1) + " hPa");
+    display.setCursor(0, 20);
+    display.println("Humedad: " + String(hum_relative) + "%");
+    display.setCursor(0, 30); 
+    display.println("Hora: " + String(now.hour) + ":" + String(now.minute));
+    display.setCursor(0, 40);
+    display.println("Ganas de cocinar");
+    display.setCursor(0, 50);
+    display.println(String(ganas_de_cocinar));
+    display.display(); 
+  } 
+  else 
+  {
+    display.clearDisplay(); 
+    display.setCursor(0 , 0); 
+    display.println("Comida recomendada:"); 
+    display.setCursor(0, 20); 
+    display.println(results);
+    display.display(); 
+  }
 
   // Button Pressed MAIN 
   // Llama función para calcular la recomendación 
 
-  sendMessage(results, numLucas);
+  if (ButtonPressed(0, D0, 0) == 1) {
+    Serial.println("Button 1 pressed!"); 
+    results = ProcessData(hum_relative, temp, pressure/100.0, now.hour, ganas_de_cocinar);
+  }
 
-  delay(20000); 
+  if(ButtonPressed(1, D4, 0) == 1)
+  {
+    Serial.println("Button 2 pressed!");
+    sendMessage(results, numLucas, apiA);
+  }
+
+  if (ButtonPressed(2, D5, 0) == 1) {
+    Serial.println("Button 3 pressed!");
+    sendMessage(results, numLara, apiB);
+  }
+
 }
 
 void connect_WIFI() {
@@ -201,9 +186,10 @@ void connect_WIFI() {
   }
 }
 
-void sendMessage(String message, String number)
+void sendMessage(String message, String number, int api)
 {
-  String url = "http://api.callmebot.com/whatsapp.php?phone=" + String(lucas) + "&apikey=" + apiKey + "&text=" + urlEncode(message);
+  digitalWrite(D3, HIGH);
+  String url = "http://api.callmebot.com/whatsapp.php?phone=" + String(number) + "&apikey=" + String(api) + "&text=" + urlEncode(message);
   WiFiClient client;    
   HTTPClient http;
   http.begin(client, url);
@@ -220,6 +206,70 @@ void sendMessage(String message, String number)
     Serial.print("HTTP response code: ");
     Serial.println(httpResponseCode);
   }
-
+  digitalWrite(D3, LOW);
   http.end();
+}
+
+void welcome_message()
+{
+  display.clearDisplay(); 
+  display.setTextSize(1); 
+  display.setCursor(0,0);
+  display.println("Lucas Perata - 2025");
+  display.setCursor(0, 20); 
+  display.println("Que comemos hoy - V1"); 
+  display.display();
+
+  delay(3000);
+}
+
+void setup_modules()
+{
+  // Iniciar comunicación serial
+  EEPROM.begin(512);
+  Serial.begin(9600);
+  delay(1000); 
+
+  Serial.println("Inicializando I2C...");
+  
+  // Inicializar I2C en los pines definidos
+  Wire.begin(SDA_PIN, SCL_PIN);
+  Serial.println("I2C inicializado");
+
+  // Inicializar la pantalla OLED
+  Serial.println("Inicializando OLED...");
+  if (!display.begin(SCREEN_ADDRESS, true)) {
+    Serial.println(F("Error: Inicialización de SH1106 fallida"));
+    while (1); 
+  }
+  Serial.println(F("SH1106 Inicializado Correctamente"));
+
+  // Configurar la pantalla OLED
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+
+  // Inicializar el sensor BMP180
+  Serial.println("Inicializando BMP180...");
+  if (!bmp.begin()) {
+    Serial.println(F("Error: Inicialización de BMP180 fallida"));
+    while (1); 
+  }
+  Serial.println(F("BMP180 Inicializado Correctamente"));
+
+  if (!aht.begin()) {
+    Serial.println("Could not find AHT? Check wiring");
+    while (1) delay(10);
+  }
+  Serial.println("AHT10 or AHT20 found");
+
+  // CONFIG RCT MODULE 
+  rtc.init();
+  /* if (EEPROM.read(EEPROM_ADDR_RTC_CONFIGURED) != 1) {
+    setRTCTime(); 
+    EEPROM.write(EEPROM_ADDR_RTC_CONFIGURED, 1); 
+    EEPROM.commit();
+  } */ 
+ setRTCTime();
 }
