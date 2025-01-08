@@ -43,6 +43,8 @@ String results;
 float temp;
 float pressure;
 float hum_relative; 
+int progressValue = 0; // Valor inicial de la barra de progreso (0-100)
+const int maxProgress = 100; // Valor máximo de la barra
 
 
 // TIEMPO 
@@ -61,6 +63,28 @@ void setup_modules();
 void connect_WIFI(); 
 void sendMessage(String message, String number, int api); 
 void displayAtmosphericValues(int tem, int pres, int hum);
+void sendMessageProcess(String num, int api);
+void drawProgressBar(int progress) {
+int w = 120; // Ancho de la barra
+  int h = 20;  // Altura de la barra
+  int x = (SCREEN_WIDTH - w) / 2;    // Centrar horizontalmente
+  int y = (SCREEN_HEIGHT - h) / 2;   // Centrar verticalmente
+
+
+  display.clearDisplay(); 
+  display.setCursor(0, 0); 
+  display.println("Eligiendo la mejor comida..."); 
+  display.drawRect(x, y, w, h, SH110X_WHITE);
+
+  // Calcular el ancho de la parte rellena
+  int filledWidth = map(progress, 0, 100, 0, w - 2); // Restar 2 para no salirse del contorno
+
+  // Rellenar la barra según el progreso
+  display.fillRect(x + 1, y + 1, filledWidth, h - 2, SH110X_WHITE);
+
+  // Actualizar la pantalla
+  display.display();
+}
 
 void setRTCTime() {
   Ds1302::DateTime dt;
@@ -74,6 +98,12 @@ void setRTCTime() {
 }
 
 void setup() {
+
+  setup_modules(); 
+  connect_WIFI(); 
+ 
+  welcome_message(); 
+
   // Botones 
   pinMode(D0, INPUT_PULLUP);
   pinMode(D4, INPUT_PULLUP);
@@ -84,12 +114,6 @@ void setup() {
 
   // Potentiometer 
  pinMode(A0, INPUT); 
-
-
-  setup_modules(); 
-  connect_WIFI(); 
- 
-  welcome_message(); 
 
   temp = bmp.readTemperature();
   pressure = bmp.readPressure();
@@ -135,23 +159,32 @@ void loop() {
     display.display(); 
   }
 
-  // Button Pressed MAIN 
-  // Llama función para calcular la recomendación 
+  // Procesado de datos 
 
   if (ButtonPressed(0, D0, 0) == 1) {
     Serial.println("Button 1 pressed!"); 
+ 
+    while(progressValue < 100)
+    {
+      progressValue += 10;
+      drawProgressBar(progressValue);
+      delay(500);
+    }
+
+    progressValue = 0; 
+
     results = ProcessData(hum_relative, temp, pressure/100.0, now.hour, ganas_de_cocinar);
+
   }
 
+  // Envío de mensajes 
   if(ButtonPressed(1, D4, 0) == 1)
   {
-    Serial.println("Button 2 pressed!");
-    sendMessage(results, numLucas, apiA);
+    sendMessageProcess(numLucas, apiA);
   }
 
   if (ButtonPressed(2, D5, 0) == 1) {
-    Serial.println("Button 3 pressed!");
-    sendMessage(results, numLara, apiB);
+   sendMessageProcess(numLara, apiB);
   }
 
 }
@@ -159,13 +192,13 @@ void loop() {
 void connect_WIFI() {
   WiFi.mode(WIFI_STA);
   WiFi.setPhyMode(WIFI_PHY_MODE_11G);
-  delay(1000);
+  delay(1);
   WiFi.begin(ssid, password); // Conectar a la red
   Serial.print("Connecting to ");
   Serial.print(ssid); 
   Serial.println(" ...");
 
-  int max_attempts = 30; // Aumentar el número de intentos
+  int max_attempts = 10; 
   int attempt = 0;
 
   while (WiFi.status() != WL_CONNECTED && attempt < max_attempts) { // Espera para conectar
@@ -180,6 +213,10 @@ void connect_WIFI() {
     Serial.println("Connection established!");  
     Serial.print("IP address:\t");
     Serial.println(WiFi.localIP()); // Mostrar IP asignada
+    display.clearDisplay();
+    display.println("WiFi conectado");
+    display.display(); 
+    delay(1000);
   } else {
     Serial.println('\n');
     Serial.println("Failed to connect to Wi-Fi");
@@ -272,4 +309,24 @@ void setup_modules()
     EEPROM.commit();
   } */ 
  setRTCTime();
+}
+
+void sendMessageProcess(String num, int api)
+{
+if(!results.isEmpty())
+   {
+    Serial.println("Button 2 pressed!");
+    sendMessage(results, num, api);
+    display.setCursor(0, 40); 
+    display.println("Mensaje enviado a Lucas");
+    display.display();
+    delay(1000);
+   } 
+   else 
+   {
+    display.setCursor(0, 40);
+    display.println("Nada que enviar");
+    display.display();
+    delay(1000);
+   }
 }
