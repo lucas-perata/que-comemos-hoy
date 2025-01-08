@@ -45,7 +45,7 @@ float pressure;
 float hum_relative; 
 int progressValue = 0; // Valor inicial de la barra de progreso (0-100)
 const int maxProgress = 100; // Valor máximo de la barra
-
+int elapsed_time = 0; 
 
 // TIEMPO 
 Ds1302 rtc(15, 12, 13);
@@ -64,6 +64,7 @@ void connect_WIFI();
 void sendMessage(String message, String number, int api); 
 void displayAtmosphericValues(int tem, int pres, int hum);
 void sendMessageProcess(String num, int api);
+void setEnvVariables();
 void drawProgressBar(int progress) {
 int w = 120; // Ancho de la barra
   int h = 20;  // Altura de la barra
@@ -115,11 +116,7 @@ void setup() {
   // Potentiometer 
  pinMode(A0, INPUT); 
 
-  temp = bmp.readTemperature();
-  pressure = bmp.readPressure();
-  sensors_event_t humidity, temps;
-  aht.getEvent(&humidity, &temps);
-  hum_relative = humidity.relative_humidity;
+  setEnvVariables();
  }
 
 
@@ -130,6 +127,14 @@ void loop() {
   // TIEMPO 
   Ds1302::DateTime now; 
   rtc.getDateTime(&now); 
+
+  elapsed_time++; 
+
+  if(elapsed_time > 300)
+  {
+    setEnvVariables();
+    elapsed_time = 0;
+  }
 
   // Mostrar datos en la pantalla OLED
   if(results.isEmpty())
@@ -315,18 +320,28 @@ void sendMessageProcess(String num, int api)
 {
 if(!results.isEmpty())
    {
-    Serial.println("Button 2 pressed!");
     sendMessage(results, num, api);
-    display.setCursor(0, 40); 
+    display.clearDisplay();
+    display.setCursor(0, 20); 
     display.println("Mensaje enviado a Lucas");
     display.display();
     delay(1000);
    } 
    else 
    {
-    display.setCursor(0, 40);
+    display.clearDisplay();
+    display.setCursor(0, 20);
     display.println("Nada que enviar");
     display.display();
     delay(1000);
    }
+}
+
+void setEnvVariables()
+{
+  temp = bmp.readTemperature();
+  pressure = bmp.readPressure();
+  sensors_event_t humidity, temps;
+  aht.getEvent(&humidity, &temps);
+  hum_relative = humidity.relative_humidity;
 }
